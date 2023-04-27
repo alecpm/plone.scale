@@ -2,6 +2,9 @@ from cStringIO import StringIO
 import PIL.Image
 import PIL.ImageFile
 
+WEBP_SUPPORT = ".webp" in PIL.Image.registered_extensions()
+
+
 # Set a larger buffer size. This fixes problems with jpeg decoding.
 # See http://mail.python.org/pipermail/image-sig/1999-August/000816.html for
 # details.
@@ -32,9 +35,27 @@ def scaleImage(image, width=None, height=None, direction="down",
 
     # When we create a new image during scaling we loose the format
     # information, so remember it here.
-    format = image.format
-    if not format == 'PNG':
-        format = 'JPEG'
+    format_ = image.format
+    orig_format = format_
+    if WEBP_SUPPORT:
+        format_ = "WEBP"
+    elif format_ not in ("PNG", "GIF"):
+        # Always generate JPEG, except if format is PNG or GIF.
+        format_ = "JPEG"
+    elif format_ == "GIF":
+        # GIF scaled looks better if we have 8-bit alpha and no palette
+        format_ = "PNG"
+
+    options = {}
+    if format_ == 'WEBP' and orig_format in ('PNG', 'GIF'):
+        options['lossless'] = True
+        options['quality'] = 100
+    elif format_ == 'JPEG':
+        options['progressive'] = True
+        options['optimize'] = True
+        options['quality'] = quality
+    elif format_ == 'PNG':
+        options['optimize'] = True
 
     image = scalePILImage(image, width, height, direction)
 
@@ -42,40 +63,37 @@ def scaleImage(image, width=None, height=None, direction="down",
         result = StringIO()
         image.save(
             result,
-            format,
-            quality=quality,
-            optimize=True,
-            progressive=True)
+            format_,
+            **options)
         result = result.getvalue()
     else:
         image.save(
             result,
-            format,
-            quality=quality,
-            optimize=True,
-            progressive=True)
+            format_,
+            **options)
         result.seek(0)
 
-    return result, format, image.size
+    return result, format_, image.size
 
 
 def scalePILImage(image, width=None, height=None, direction="down"):
     """Scale a PIL image to another size.
 
-    The generated image is a JPEG image, unless the original is a PNG
-    image. This is needed to make sure alpha channel information is
-    not lost, which JPEG does not support.
+    The generated image is a WEBP image if available, otherwise a JPEG image,
+    unless the original is a PNG or GIF image in qhich case it is a PNG. This is
+    needed to make sure alpha channel information is not lost, which JPEG does
+    not support.
 
     Three different scaling options are supported:
 
-    * `up` scaling scales the smallest dimension up to the required size
-      and scrops the other dimension if needed.
+    * `up` scaling scales the smallest dimension up to the required size and
+      scrops the other dimension if needed.
     * `down` scaling starts by scaling the largest dimension to the required
       size and scrops the other dimension if needed.
     * `thumbnail` scales to the requested dimensions without cropping. The
       resulting image may have a different size than requested. This option
-      requires both width and height to be specified. `keep` is accepted as
-      an alternative spelling for this option, but its use is deprecated.
+      requires both width and height to be specified. `keep` is accepted as an
+      alternative spelling for this option, but its use is deprecated.
 
     The `image` parameter must be an instance of the `PIL.Image` class.
 
