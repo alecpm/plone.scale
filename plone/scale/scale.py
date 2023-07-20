@@ -12,7 +12,7 @@ PIL.ImageFile.MAXBLOCK = 1000000
 
 
 def scaleImage(image, width=None, height=None, direction="down",
-               quality=88, result=None):
+               quality=88, result=None, allow_webp=True):
     """Scale the given image data to another size and return the result
     as a string or optionally write in to the file-like `result` object.
 
@@ -37,7 +37,7 @@ def scaleImage(image, width=None, height=None, direction="down",
     # information, so remember it here.
     format_ = image.format
     orig_format = format_
-    if WEBP_SUPPORT:
+    if WEBP_SUPPORT and allow_webp:
         format_ = "WEBP"
     elif format_ not in ("PNG", "GIF"):
         # Always generate JPEG, except if format is PNG or GIF.
